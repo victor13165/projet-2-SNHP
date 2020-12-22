@@ -33,40 +33,51 @@ void integre(int N,double dt,double dx, double *h, double *hu, double *fh, doubl
   h[N-1] = h[N-2]; hu[N-1] = -hu[N-2]; // droite => mur : hg = hd, ug = -ud
 }
 
+
 // Calcul des flux
 // Schema HLL : flux solution au travers des surface
 // => resolution d'un probleme de riemann au travers de chaque surface
+void calculFlux(double hg, double hd, double ug, double ud, double *fh, double *fu, double *cmax)
+{
+  double g = 9.81, cm,cg,cd,c1,c2;
+
+  cg = sqrt(g*hg);  cd = sqrt(g*hd);
+  // Calcul des vitesse d'onde
+  c1 = fmin(ug - cg , ud - cd);
+  c2 = fmax(ug + cg , ud + cd);
+
+  if(c1 >= 0.0) { // toutes les ondes traversent par la droite
+    *fh = hg*ug ;
+    *fu = hg*ug*ug + 0.5*g*hg*hg;
+    cm = fabs(c2);
+  } else if (c2 <= 0.0) { // toutes les ondes traversent a gauche
+    *fh = hd*ud ;
+    *fu = hd*ud*ud + 0.5*g*hd*hd;
+    cm = fabs(c1);
+  } else {   // cas ou l'on a un probleme de Riemann
+    // Flux HLL F = (c2*fg - c1*fd)/(c2-c1)  + c1*c2*(Ud - Ug)/(c2-c1)
+    *fh = ( c2*hg*ug - c1*hd*ud )/(c2-c1) + c1*c2*(hd-hg)/(c2-c1);
+    *fu= ( c2*( hg*ug*ug + 0.5*g*hg*hg ) - c1*( hd*ud*ud + 0.5*g*hd*hd ))/(c2-c1) + c1*c2*(hd*ud-hg*ug)/(c2-c1);
+    cm = fmax(fabs(c1),fabs(c2));
+  }
+
+  *cmax = fmax(*cmax,cm); // vitesse d'onde max
+
+}
+
+//Résoudre les flux pour chaque point
 double Flux(int N, double *h, double *hu, double *fh, double *fu)
 {
   int i;
   double g=9.81,cm,cmax=0.0;
-  double hg, hd, hug, hud, ug,ud,cg,cd,c1,c2;
+  double hg, hd, ug, ud;
   for(i=0;i<=N-2;i++)
   {
     hg =  h[i]   ; hd =  h[i+1];
     ug = hu[i]/hg; ud = hu[i+1]/hd;
-    // calcul des vitesses du son c = sqrt(gh)
-    cg = sqrt(g*hg);  cd = sqrt(g*hd);
-    // Calcul des vitesse d'onde
-    c1 = fmin(ug - cg , ud - cd);
-    c2 = fmax(ug + cg , ud + cd);
-
-    if(c1 >= 0.0) { // toutes les ondes traversent par la droite
-      fh[i] = hg*ug ;
-      fu[i] = hg*ug*ug + 0.5*g*hg*hg;
-      cm = fabs(c2);
-    } else if (c2 <= 0.0) { // toutes les ondes traversent a gauche
-      fh[i] = hd*ud ;
-      fu[i] = hd*ud*ud + 0.5*g*hd*hd;
-      cm = fabs(c1);
-    } else {   // cas ou l'on a un probleme de Riemann
-      // Flux HLL F = (c2*fg - c1*fd)/(c2-c1)  + c1*c2*(Ud - Ug)/(c2-c1)
-      fh[i] = ( c2*hg*ug - c1*hd*ud )/(c2-c1) + c1*c2*(hd-hg)/(c2-c1);
-      fu[i] = ( c2*( hg*ug*ug + 0.5*g*hg*hg ) - c1*( hd*ud*ud + 0.5*g*hd*hd ) )/(c2-c1) + c1*c2*(hd*ud-hg*ug)/(c2-c1);
-      cm = fmax(fabs(c1),fabs(c2));
-    }
-    cmax = fmax(cmax,cm); // vitesse d'onde max
+    calculFlux(hg,hd,ug,ud,&fh[i],&fu[i],&cmax);
   }
+
   return cmax;
 }
 // ecriture des résultats dans un fichier
@@ -80,10 +91,22 @@ void ecrit(int N,FILE* fichier,double *x, double *h, double *hu)
   }
   fclose(fichier); // fermeture
 }
+
+void afficheTab(int N, double *tab)
+{
+  int i;
+
+  for (i = 0; i < N; i++)
+  {
+    printf("%lf\n",tab[i]);
+  }
+  printf("\n");
+}
+
 //fonction principale
 int main(int argc, char* argv[])
 {
-  int N=1000,Nt=1000, it;
+  int N=100,Nt=100, it;
   double dx,dt,cm;
   double *x,*h, *hu, *fh, *fu;
   FILE *finit, *fres;
@@ -107,11 +130,12 @@ int main(int argc, char* argv[])
   for(it=1;it<=Nt;it++)   // boucle en temps
   {
     cm = Flux(N,h,hu,fh,fu);     // calcul des flux HLL et vitesse d'onde (cm)
-    dt = 0.75*dx/cm;              // calcul du pas de temps admissible
-    integre(N,dt,dx,h,hu,fh,fu); // integration sur un pas de temps Vol. Finis
+    // afficheTab(N,fh);
+    // dt = 0.75*dx/cm;              // calcul du pas de temps admissible
+    // integre(N,dt,dx,h,hu,fh,fu); // integration sur un pas de temps Vol. Finis
   }
 
-  ecrit(N,fres,x,h,hu);
+  ecrit(N,fres,x,fh,fu);
   free(x); free(h); free(hu); free(fh); free(fu);
   return 0;
 }
