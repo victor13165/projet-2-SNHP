@@ -50,20 +50,19 @@ double Flux(int N, double *h, double *hu, double *fh, double *fu)
     // Calcul des vitesse d'onde
     c1 = fmin(ug - cg , ud - cd);
     c2 = fmax(ug + cg , ud + cd);
-    if(c1>=0.0){ // toutes les ondes traversent par la droite
+
+    if(c1 >= 0.0) { // toutes les ondes traversent par la droite
       fh[i] = hg*ug ;
       fu[i] = hg*ug*ug + 0.5*g*hg*hg;
       cm = fabs(c2);
-    }
-    else if(c2<=0.0){ // toutes les ondes traversent a gauche
+    } else if (c2 <= 0.0) { // toutes les ondes traversent a gauche
       fh[i] = hd*ud ;
       fu[i] = hd*ud*ud + 0.5*g*hd*hd;
       cm = fabs(c1);
-    }
-    else{   // cas ou l'on a un probleme de Riemann
+    } else {   // cas ou l'on a un probleme de Riemann
       // Flux HLL F = (c2*fg - c1*fd)/(c2-c1)  + c1*c2*(Ud - Ug)/(c2-c1)
       fh[i] = ( c2*hg*ug - c1*hd*ud )/(c2-c1) + c1*c2*(hd-hg)/(c2-c1);
-      fu[i]= ( c2*( hg*ug*ug + 0.5*g*hg*hg ) - c1*( hd*ud*ud + 0.5*g*hd*hd ))/(c2-c1) + c1*c2*(hd*ud-hg*ug)/(c2-c1);
+      fu[i] = ( c2*( hg*ug*ug + 0.5*g*hg*hg ) - c1*( hd*ud*ud + 0.5*g*hd*hd ) )/(c2-c1) + c1*c2*(hd*ud-hg*ug)/(c2-c1);
       cm = fmax(fabs(c1),fabs(c2));
     }
     cmax = fmax(cmax,cm); // vitesse d'onde max
@@ -94,7 +93,7 @@ int main(int argc, char* argv[])
 
   printf("%d %d\n",N,Nt);
   dx = 1.0/(double) (N);
-  dt = 0.00000001;;
+  dt = 0.00000001;
 
   x  = malloc(N*sizeof(double));  // allocation sur N points
   h  = malloc(N*sizeof(double));
