@@ -37,7 +37,6 @@ void init(int N, double dx, double *x, double *h, double *hu, double x0)
     if(x[i]<0.5)  h[i] = 10.0;  // hauteur : discontinue en x=0.5
     else          h[i] = 1.0;   //
     hu[i] = 0.0;                // vitesse nulle partout => hu = 0 !
-
   }
 }
 
@@ -59,21 +58,25 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
 
   //Echange de données : il faut que chaque cpu récupère les valeurs de fh[N-1] et fu[N-1] du CPU précédent
   //On utilise la technique pair/impair vu en cours
+
   if (iCPU != nCPU-1) //Tout le monde doit envoyer sauf CPU N-1
   {
     a_envoyer[0] = fh[N-1]; a_envoyer[1] = fu[N-1]; // Les données à envoyer : la fin du domaine du CPU courant
     // On envoie au CPU + 1
     erreur = MPI_Send(a_envoyer, 2 , MPI_DOUBLE_PRECISION, iCPU+1  , 257 + iCPU, MPI_COMM_WORLD);
-    // printf("INTEGRE %d sent to %d\n",iCPU,iCPU+1);
+
+    //Dans ce cas il faut calculer l'élément N-1 car on n'est pas au bout du domaine
     h[N-1] = h[N-1] - rap*(fh[N-1] - fh[N-2]);
     hu[N-1] = hu[N-1] - rap*(fu[N-1] - fu[N-2]);
   }
+
   if (iCPU != 0) //Tout le monde doit recevoir sauf CPU 0
   {
     //On reçoit du CPU - 1
     erreur = MPI_Recv(a_recevoir,2,MPI_DOUBLE_PRECISION, iCPU - 1, 257 + iCPU - 1, MPI_COMM_WORLD, &statut);
     fhm = a_recevoir[0]; fum = a_recevoir[1]; //Données stockées pour calculer h[0] et hu[0]
-    // printf("INTEGRE %d received from %d\n",iCPU,iCPU-1);
+
+    //Dans ce cas,
     h[0] = h[0] - rap*(fh[0] - fhm);
     hu[0] = hu[0] - rap*(fu[0] - fum);
   }
