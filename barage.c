@@ -111,7 +111,7 @@ void affiche(int it,int N,double *x, double *h, double *hu, double *fh, double *
 //fonction principale
 int main(int argc, char* argv[])
 {
-  int N=1000,Nt=1000, it;
+  int N=100000,Nt=1000, it;
   double dx,dt,cm;
   double *x,*h, *hu, *fh, *fu;
   FILE *finit, *fres;

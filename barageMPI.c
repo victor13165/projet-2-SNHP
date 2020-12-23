@@ -20,14 +20,14 @@ int decoupe(int iCPU, int NCPU, int N, double dx, double *x0)
   }
   else
   { // sinon on n'ajoute rien et on définit le point de départ
-    *x0 = (double) ( NP*iCPU + reste )*dx;
+    *x0 = (double) (NP*iCPU + reste )*dx;
   }
 
   return NP;
 }
 
 
-// initialisation des champs. Rien à changer sauf x0
+// initialisation des champs à partir du x0 propre à chaque CPU
 void init(int N, double dx, double *x, double *h, double *hu, double x0)
 {
   int i;
@@ -50,53 +50,77 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
   double a_envoyer[2], a_recevoir[2];
   MPI_Status statut;
 
+  //Résolution standard
   for(i=1;i<=N-2;i++)
   {
     h[i]  = h[i]  - rap*(fh[i]-fh[i-1]);
     hu[i] = hu[i] - rap*(fu[i]-fu[i-1]);
   }
 
-  //Echange de données : il faut que chaque cpu récupère les valeurs de fh[N-1] et fu[N-1] du CPU précédent
-  //On utilise la technique pair/impair vu en cours
+  //CONDITIONS LIMITES
+  // --> Pour un CPU quelconque : Il faut que chaque cpu récupère les valeurs de fh[N-1] et fu[N-1] du CPU précédent
+  // --> Pour les CPUs 0 et N-1 : On applique les conditions limites
 
-  if (iCPU != nCPU-1) //Tout le monde doit envoyer sauf CPU N-1
+  //On utilise la technique pair/impair pour les envois et réception vu en cours
+  if (iCPU%2==0) //Cas pair : on envoie en premier
   {
-    a_envoyer[0] = fh[N-1]; a_envoyer[1] = fu[N-1]; // Les données à envoyer : la fin du domaine du CPU courant
-    // On envoie au CPU + 1
-    erreur = MPI_Send(a_envoyer, 2 , MPI_DOUBLE_PRECISION, iCPU+1  , 257 + iCPU, MPI_COMM_WORLD);
 
-    //Dans ce cas il faut calculer l'élément N-1 car on n'est pas au bout du domaine
-    h[N-1] = h[N-1] - rap*(fh[N-1] - fh[N-2]);
-    hu[N-1] = hu[N-1] - rap*(fu[N-1] - fu[N-2]);
+    if (iCPU != nCPU-1) //Tout le monde doit envoyer au CPU+1 sauf CPU N-1
+    {
+      a_envoyer[0] = fh[N-1]; a_envoyer[1] = fu[N-1]; // Les données à envoyer : les dernières valeurs du CPU courant
+      // On envoie au CPU + 1
+      erreur = MPI_Send(a_envoyer, 2 , MPI_DOUBLE_PRECISION, iCPU+1  , 257 + iCPU, MPI_COMM_WORLD);
+
+    }
+
+    if (iCPU != 0) //Tout le monde doit recevoir du CPU-1 sauf CPU 0
+    {
+      //On reçoit du CPU - 1
+      erreur = MPI_Recv(a_recevoir,2,MPI_DOUBLE_PRECISION, iCPU - 1, 257 + iCPU - 1, MPI_COMM_WORLD, &statut);
+      fhm = a_recevoir[0]; fum = a_recevoir[1]; //Données stockées pour calculer h[0] et hu[0]
+    }
+
   }
-
-  if (iCPU != 0) //Tout le monde doit recevoir sauf CPU 0
+  else //Cas impair : on reçoit en premier
   {
     //On reçoit du CPU - 1
     erreur = MPI_Recv(a_recevoir,2,MPI_DOUBLE_PRECISION, iCPU - 1, 257 + iCPU - 1, MPI_COMM_WORLD, &statut);
     fhm = a_recevoir[0]; fum = a_recevoir[1]; //Données stockées pour calculer h[0] et hu[0]
 
-    //Dans ce cas,
-    h[0] = h[0] - rap*(fh[0] - fhm);
-    hu[0] = hu[0] - rap*(fu[0] - fum);
+    if (iCPU != nCPU-1) //Tout le monde doit envoyer sauf CPU N-1
+    {
+      a_envoyer[0] = fh[N-1]; a_envoyer[1] = fu[N-1]; // Les données à envoyer : la fin du domaine du CPU courant
+      // On envoie au CPU + 1
+      erreur = MPI_Send(a_envoyer, 2 , MPI_DOUBLE_PRECISION, iCPU+1  , 257 + iCPU, MPI_COMM_WORLD);
+    }
+
   }
 
   /*
   Très vicieux la synthaxe h[0] = h[1]; hu[0] = hu[1]... ça m'a valu
-  plusieurs jours de débugage... Le hu[0] = hu[1] n'était plus dans la boucle if
-  et pareil pour le deuxième if avec hu[N-1] = -hu[N-2]... :)
+  plusieurs jours de débugage!
   */
-  if (iCPU == 0)
-    { // gauche => sortie libre : hg = hd, ug = ud
-      h[0] = h[1];
-      hu[0] = hu[1];
-    }
-  if (iCPU == nCPU-1) // droite => mur : hg = hd, ug = -ud
+  if (iCPU != 0) //Si on n'est pas 0, on résout le point 0 avec les éléments envoyés précédemment
+  {
+    h[0] = h[0] - rap*(fh[0] - fhm);
+    hu[0] = hu[0] - rap*(fu[0] - fum);
+  }
+  else //Sinon on résout le point 0 avec la condition limite en 0
+  {
+    h[0] = h[1];
+    hu[0] = hu[1];
+  }
+
+  if (iCPU != nCPU - 1) //Si on n'est pas N-1, on résout le point N-1 normalement
+  {
+    h[N-1] = h[N-1] - rap*(fh[N-1] - fh[N-2]);
+    hu[N-1] = hu[N-1] - rap*(fu[N-1] - fu[N-2]);
+  }
+  else //Sinon, on résout le point N-1 avec la condition limite en N-1
   {
     h[N-1] = h[N-2];
     hu[N-1] = -hu[N-2];
   }
-
 
 }
 
@@ -144,72 +168,85 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
   int i, erreur;
   double g=9.81,cm,cmax=0.0,cmaxp=0.0;
   double hg, hd, hug, hud, ug,ud,cg,cd,c1,c2;
-  double a_envoyer[2], a_recevoir[2];
+  double a_envoyer[2], a_recevoir[2]; //Tableaux pour le transfert de données
   MPI_Status statut;
 
   for(i=0;i<=N-2;i++)
   {
     hg =  h[i]   ; hd =  h[i+1];
     ug = hu[i]/hg; ud = hu[i+1]/hd;
-    calculFlux(i,iCPU,hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp);
-    // printf("%d : fh = %lf     fu = %lf\n",iCPU, fh[i],fu[i]);
+    calculFlux(i,iCPU,hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp); //Calcul du flux
   }
 
-  if (iCPU != 0) //Tout le monde doit envoyer sauf CPU 0
+
+  if (iCPU%2==0) //Cas pair : on envoie en premier
   {
-    a_envoyer[0] = h[0]; a_envoyer[1] = hu[0]; //Données à envoyer au CPU - 1
-    //Envoi
-    erreur = MPI_Send(a_envoyer , 2 , MPI_DOUBLE_PRECISION, iCPU-1  , 257 + iCPU   , MPI_COMM_WORLD);
-    //printf("FLUX : %d sent to %d\n",iCPU,iCPU-1);
-  }
 
-  //Réception du CPU + 1
-  if (iCPU != nCPU-1) //Tout le monde doit recevoir sauf CPU N-1
+    if (iCPU != 0) //Tout le monde doit envoyer sauf CPU 0
+    {
+      a_envoyer[0] = h[0]; a_envoyer[1] = hu[0]; //Données à envoyer au CPU - 1
+      //Envoi
+      erreur = MPI_Send(a_envoyer , 2 , MPI_DOUBLE_PRECISION, iCPU-1  , 257 + iCPU   , MPI_COMM_WORLD);
+    }
+
+    //Réception du CPU + 1
+    if (iCPU != nCPU-1) //Tout le monde doit recevoir sauf CPU N-1
+    {
+      erreur = MPI_Recv(a_recevoir, 2 , MPI_DOUBLE_PRECISION, iCPU+1, 257 + iCPU + 1 ,MPI_COMM_WORLD, &statut);
+      // printf("FLUX : %d received from %d\n",iCPU,iCPU+1);
+      hd = a_recevoir[0]; ud = a_recevoir[1]/hd; //Initialisation des paramètres
+      hg = h[N-1] ; ug = hu[N-1]/hg;
+    }
+
+  }
+  else //Cas impair : on reçoit en premier
   {
-    erreur = MPI_Recv(a_recevoir, 2 , MPI_DOUBLE_PRECISION, iCPU+1, 257 + iCPU + 1 ,MPI_COMM_WORLD, &statut);
-    // printf("FLUX : %d received from %d\n",iCPU,iCPU+1);
-    hd = a_recevoir[0]; ud = a_recevoir[1]/hd; //Initialisation des paramètres
-    hg = h[N-1] ; ug = hu[N-1]/hg;
-    calculFlux(N-1,iCPU,hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux
+
+    if (iCPU != nCPU-1) //Tout le monde doit recevoir sauf CPU N-1
+    {
+      //Réception
+      erreur = MPI_Recv(a_recevoir, 2 , MPI_DOUBLE_PRECISION, iCPU+1, 257 + iCPU + 1 ,MPI_COMM_WORLD, &statut);
+
+      hd = a_recevoir[0]; ud = a_recevoir[1]/hd; //Initialisation des paramètres
+      hg = h[N-1] ; ug = hu[N-1]/hg;
+    }
+
+    if (iCPU != 0) //Tout le monde doit envoyer sauf CPU 0
+    {
+      a_envoyer[0] = h[0]; a_envoyer[1] = hu[0]; //Données à envoyer au CPU - 1
+      //Envoi
+      erreur = MPI_Send(a_envoyer , 2 , MPI_DOUBLE_PRECISION, iCPU-1  , 257 + iCPU   , MPI_COMM_WORLD);
+    }
+
   }
 
-  //On prend le max de toutes les vitesses cmp et on avance du dt admissible pour cette valeur max.
-  //Ainsi, tout le monde va avancer du même dt
+  if (iCPU != nCPU-1) calculFlux(N-1,iCPU,hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
+
+
+  //On prend le max de toutes les vitesses cmaxp !! Ainsi, tout le monde va avancer du même dt
   erreur = MPI_Allreduce(&cmaxp, &cmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD);
-  // printf("%d / %d  cmaxp : %lf    cmax : %lf\n",iCPU,nCPU,cmaxp,cmax);
+
   return cmax;
 }
 
 // ecriture des résultats dans un fichier
 // sauvegarde de h et u
-// PARALLELISATION OK
-void ecrit(int N,FILE* fichier,double *x, double *h, double *hu, double *fh, double *fu, double cmax)
+void ecrit(int N, FILE* fichier,double *x, double *h, double *hu)
 {
   int i;
-  // fprintf(fichier,"    x       h         hu        fh        fu      cmax\n");
   for(i=0;i<N;i++)
   {
-    fprintf(fichier,"%lf %lf %lf %lf %lf %lf\n",x[i],h[i], hu[i]/h[i], fh[i], fu[i], cmax);
+    fprintf(fichier,"%lf %lf %lf\n",x[i],h[i], hu[i]/h[i]);
   }
   fclose(fichier); // fermeture
-}
-
-void affiche(int iCPU, int nCPU, int it,int N,double *x, double *h, double *hu, double *fh, double *fu, double cmax)
-{
-  int i;
-  printf("\n%d/%d -- Iteration %d\n    x       h         hu        fh        fu      cmax\n",iCPU,nCPU,it);
-  for(i=0;i<N;i++)
-  {
-    printf("%lf %lf %lf %lf %lf %lf\n",x[i],h[i], hu[i]/h[i],fh[i],fu[i],cmax);
-  }
 }
 
 //fonction principale
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=1000, Nt = 1000;
-  double x0, dx = 1.0/((double)N), cm=0.0,cmp, dt;
+  int NP, N=10000, Nt = 1000;
+  double x0, dx, cm=0.0, dt, start, end;
   char fichier_init[15], fichier_res[15];
   FILE* finit, *fres;
   double *x,*h, *hu, *fh, *fu;
@@ -217,6 +254,12 @@ int main(int argc, char* argv[])
   erreur = MPI_Init(&argc, &argv);
   erreur = MPI_Comm_size(MPI_COMM_WORLD,&nCPU);
   erreur = MPI_Comm_rank(MPI_COMM_WORLD,&iCPU);
+
+  erreur = MPI_Barrier(MPI_COMM_WORLD);
+  start = MPI_Wtime();
+
+  dx = 1.0/((double)N);
+  dt = 0.00000001;
 
   NP = decoupe(iCPU, nCPU, N, dx, &x0); //Découpage du domaine pour chaque CPU
   printf("CPU %d of %d : NP = %d\n",iCPU,nCPU,NP);
@@ -232,7 +275,7 @@ int main(int argc, char* argv[])
   //******* Ecriture des conditions initiales dans fichiers séparés ************
   sprintf(fichier_init,"MPI/init%d.dat",iCPU);
   finit = fopen(fichier_init,"w");
-  ecrit(NP,finit,x,h,hu,fh,fu,0.0);
+  ecrit(NP,finit,x,h,hu);
   //****************************************************************************
   for(it=1;it<=Nt;it++)   // boucle en temps
   {
@@ -244,8 +287,13 @@ int main(int argc, char* argv[])
   //*********** Ecriture du résultat dans fichiers séparés *********************
   sprintf(fichier_res,"MPI/res%d.dat",iCPU);
   fres = fopen(fichier_res,"w");
-  ecrit(NP,fres,x,h,hu,fh,fu,cm);
+  ecrit(NP,fres,x,h,hu);
   //****************************************************************************
+
+  erreur = MPI_Barrier(MPI_COMM_WORLD);
+  end = MPI_Wtime();
+
+  if (iCPU == 0) printf("Temps maximal : %lf s\n",end-start);
 
   MPI_Finalize();
 
