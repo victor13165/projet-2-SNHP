@@ -98,7 +98,7 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
 
   /*
   Très vicieux la synthaxe h[0] = h[1]; hu[0] = hu[1]... ça m'a valu
-  plusieurs jours de débugage!
+  plusieurs jours de débugage...
   */
   if (iCPU != 0) //Si on n'est pas 0, on résout le point 0 avec les éléments envoyés précédemment
   {
@@ -127,7 +127,7 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
 // Calcul des flux
 // Schema HLL : flux solution au travers des surface
 // => resolution d'un probleme de riemann au travers de chaque surface
-double calculFlux(int ix, int iCPU, const double hg, const double hd, const double ug, const double ud, double *fh, double *fu, double *cmax)
+double calculFlux(const double hg, const double hd, const double ug, const double ud, double *fh, double *fu, double *cmax)
 {
   double g = 9.81, cm, cg, cd, c1, c2;
 
@@ -136,28 +136,21 @@ double calculFlux(int ix, int iCPU, const double hg, const double hd, const doub
   c1 = fmin(ug - cg , ud - cd);
   c2 = fmax(ug + cg , ud + cd);
 
-  // if (ix == 1 && iCPU == 1) printf("c1 : %lf c2 : %lf ug : %lf ud : %lf hg : %lf hd : %lf\n",c1,c2,ug,ud,hg,hd);
-
   if(c1 >= 0.0) { // toutes les ondes traversent par la droite
-    // printf("CLFLUX %d : CPU%d c1>0\n",ix,iCPU);
     *fh = hg*ug ;
     *fu = hg*ug*ug + 0.5*g*hg*hg;
     cm = fabs(c2);
   } else if (c2 <= 0.0) { // toutes les ondes traversent a gauche
-    // printf("CLFLUX %d : CPU%d c2<0\n",ix,iCPU);
     *fh = hd*ud ;
     *fu = hd*ud*ud + 0.5*g*hd*hd;
     cm = fabs(c1);
   } else {   // cas ou l'on a un probleme de Riemann
-    // Flux HLL F = (c2*fg - c1*fd)/(c2-c1)  + c1*c2*(Ud - Ug)/(c2-c1)
-    // printf("CLFLUX %d : CPU%d RIEMANN\n",ix,iCPU);
     *fh = ( c2*hg*ug - c1*hd*ud )/(c2-c1) + c1*c2*(hd-hg)/(c2-c1);
     *fu = ( c2*( hg*ug*ug + 0.5*g*hg*hg ) - c1*( hd*ud*ud + 0.5*g*hd*hd ))/(c2-c1) + c1*c2*(hd*ud-hg*ug)/(c2-c1);
     cm = fmax(fabs(c1),fabs(c2));
   }
 
   *cmax = fmax(*cmax,cm); // vitesse d'onde max
-  // printf("%d  i : %d | h : %lf | hu : %lf | fh : %lf | fu : %lf | cm : %lf | cmax : %lf\n",iCPU,ix,*fh,*fu,cm,*cmax);
 }
 
 
@@ -193,7 +186,6 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
     if (iCPU != nCPU-1) //Tout le monde doit recevoir sauf CPU N-1
     {
       erreur = MPI_Recv(a_recevoir, 2 , MPI_DOUBLE_PRECISION, iCPU+1, 257 + iCPU + 1 ,MPI_COMM_WORLD, &statut);
-      // printf("FLUX : %d received from %d\n",iCPU,iCPU+1);
       hd = a_recevoir[0]; ud = a_recevoir[1]/hd; //Initialisation des paramètres
       hg = h[N-1] ; ug = hu[N-1]/hg;
     }
@@ -222,7 +214,6 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
 
   if (iCPU != nCPU-1) calculFlux(N-1,iCPU,hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
 
-
   //On prend le max de toutes les vitesses cmaxp !! Ainsi, tout le monde va avancer du même dt
   erreur = MPI_Allreduce(&cmaxp, &cmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD);
 
@@ -245,7 +236,7 @@ void ecrit(int N, FILE* fichier,double *x, double *h, double *hu)
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=10000, Nt = 1000;
+  int NP, N=100000, Nt = 1000;
   double x0, dx, cm=0.0, dt, start, end;
   char fichier_init[15], fichier_res[15];
   FILE* finit, *fres;
@@ -277,6 +268,7 @@ int main(int argc, char* argv[])
   finit = fopen(fichier_init,"w");
   ecrit(NP,finit,x,h,hu);
   //****************************************************************************
+
   for(it=1;it<=Nt;it++)   // boucle en temps
   {
     cm = Flux(NP,iCPU,nCPU,h,hu,fh,fu);     // calcul des flux HLL et vitesse d'onde (cm)
