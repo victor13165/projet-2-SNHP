@@ -236,7 +236,7 @@ void ecrit(int N, FILE* fichier,double *x, double *h, double *hu)
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=100000, Nt = 1000;
+  int NP, N=1000000, Nt = 1000;
   double x0, dx, cm=0.0, dt, start, end;
   char fichier_init[15], fichier_res[15];
   FILE* finit, *fres;
