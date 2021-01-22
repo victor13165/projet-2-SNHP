@@ -208,7 +208,7 @@ void affiche(int iCPU, int nCPU, int it,int N,double *x, double *h, double *hu, 
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=1000, Nt = 1000;
+  int NP, N=1000000, Nt = 1000;
   double x0, dx = 1.0/((double)N), cm=0.0,cmp, dt;
   char fichier_init[15], fichier_res[15];
   FILE* finit, *fres;

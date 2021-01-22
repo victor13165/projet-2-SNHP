@@ -111,7 +111,7 @@ void affiche(int it,int N,double *x, double *h, double *hu, double *fh, double *
 //fonction principale
 int main(int argc, char* argv[])
 {
-  int N=1000,Nt=1000, it;
+  int N=10000,Nt=1000, it;
   double dx,dt,cm;
   double *x,*h, *hu, *fh, *fu;
   FILE *finit, *fres;
@@ -134,6 +134,7 @@ int main(int argc, char* argv[])
   for(it=1;it<=Nt;it++)   // boucle en temps
   {
     cm = Flux(N,h,hu,fh,fu);     // calcul des flux HLL et vitesse d'onde (cm)
+    // printf("%lf\n",cm);
     dt = 0.75*dx/cm;
     // printf("%d  %lf\n",it,dt);           // calcul du pas de temps admissible
     integre(N,dt,dx,h,hu,fh,fu); // integration sur un pas de temps Vol. Finis
