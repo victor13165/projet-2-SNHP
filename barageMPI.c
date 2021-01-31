@@ -168,7 +168,7 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
   {
     hg =  h[i]   ; hd =  h[i+1];
     ug = hu[i]/hg; ud = hu[i+1]/hd;
-    calculFlux(i,iCPU,hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp); //Calcul du flux
+    calculFlux(hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp); //Calcul du flux
   }
 
 
@@ -212,7 +212,7 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
 
   }
 
-  if (iCPU != nCPU-1) calculFlux(N-1,iCPU,hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
+  if (iCPU != nCPU-1) calculFlux(hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
 
   //On prend le max de toutes les vitesses cmaxp !! Ainsi, tout le monde va avancer du même dt
   erreur = MPI_Allreduce(&cmaxp, &cmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD);
@@ -236,15 +236,27 @@ void ecrit(int N, FILE* fichier,double *x, double *h, double *hu)
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=1000000, Nt = 1000;
+  int NP, N, Nt;
   double x0, dx, cm=0.0, dt, start, end;
   char fichier_init[15], fichier_res[15];
-  FILE* finit, *fres;
+  FILE* fparam, *finit, *fres;
   double *x,*h, *hu, *fh, *fu;
 
   erreur = MPI_Init(&argc, &argv);
   erreur = MPI_Comm_size(MPI_COMM_WORLD,&nCPU);
   erreur = MPI_Comm_rank(MPI_COMM_WORLD,&iCPU);
+
+  //Lecture des paramètres depuis le CPU 0 et broadcast à tous les autres CPU
+  if (iCPU == 0)
+  {
+    fparam = fopen("param.dat","r");
+    fscanf(fparam, "%d %d",&N,&Nt);
+    fclose(fparam);
+    printf("%d %d\n",N,Nt);
+  }
+
+  erreur = MPI_Bcast(&N,1,MPI_INT,0,MPI_COMM_WORLD); //Envoi de N
+  erreur = MPI_Bcast(&Nt,1,MPI_INT,0,MPI_COMM_WORLD); //Envoi de Nt
 
   erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
   start = MPI_Wtime(); //Outil de profiling
