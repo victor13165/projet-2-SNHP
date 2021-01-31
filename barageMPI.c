@@ -246,11 +246,11 @@ int main(int argc, char* argv[])
   erreur = MPI_Comm_size(MPI_COMM_WORLD,&nCPU);
   erreur = MPI_Comm_rank(MPI_COMM_WORLD,&iCPU);
 
-  erreur = MPI_Barrier(MPI_COMM_WORLD);
-  start = MPI_Wtime();
+  erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
+  start = MPI_Wtime(); //Outil de profiling
 
-  dx = 1.0/((double)N);
-  dt = 0.00000001;
+  dx = 1.0/((double)N); //Pas d'espace
+  dt = 0.00000001; //Pas de temps (sera recalculé dans la boucle en temps)
 
   NP = decoupe(iCPU, nCPU, N, dx, &x0); //Découpage du domaine pour chaque CPU
   printf("CPU %d of %d : NP = %d\n",iCPU,nCPU,NP);
@@ -272,7 +272,7 @@ int main(int argc, char* argv[])
   for(it=1;it<=Nt;it++)   // boucle en temps
   {
     cm = Flux(NP,iCPU,nCPU,h,hu,fh,fu);     // calcul des flux HLL et vitesse d'onde (cm)
-    dt = 0.75*dx/cm;              // calcul du pas de temps admissible
+    dt = 0.75*dx/cm;                        // calcul du pas de temps admissible
     integre(NP,iCPU,nCPU,dt,dx,h,hu,fh,fu); // integration sur un pas de temps Vol. Finis
   }
 
@@ -282,14 +282,17 @@ int main(int argc, char* argv[])
   ecrit(NP,fres,x,h,hu);
   //****************************************************************************
 
-  erreur = MPI_Barrier(MPI_COMM_WORLD);
-  end = MPI_Wtime();
+
+  //Le temps de calcul sera le temps maximal mis par le dernier CPU avant d'arriver
+  // au MPI_Barrier
+  erreur = MPI_Barrier(MPI_COMM_WORLD); //Attendre tous les CPU pour terminer le chrono
+  end = MPI_Wtime(); //Fin du chrono
 
   if (iCPU == 0) printf("Temps maximal : %lf s\n",end-start);
 
   MPI_Finalize();
 
-  free(x); free(h); free(hu); free(fh); free(fu);
+  free(x); free(h); free(hu); free(fh); free(fu); //Libérer la mémoire
 
   return 0;
 }
