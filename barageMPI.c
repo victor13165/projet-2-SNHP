@@ -10,7 +10,7 @@ int decoupe(int iCPU, int NCPU, int N, double dx, double *x0)
 {
   int NP,reste;
 
-  NP = N / NCPU; // nombre de point par CPU
+  NP = N / NCPU; // nombre de point par CPU (division entière)
   reste = N % NCPU; //Reste de la division
 
   if(iCPU < reste)  // Tant qu'il reste du reste à redistribuer
@@ -40,8 +40,7 @@ void init(int N, double dx, double *x, double *h, double *hu, double x0)
   }
 }
 
-// integration connaissant les flux
-// f_h et f_hu
+// integration connaissant les flux f_h et f_hu
 // Vol. finis : u[i]^(n+1) = u[i]^n - dt( F[i+1/2] - F[i-1/2] )
 void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double *hu, double *fh, double *fu)
 {
@@ -70,7 +69,6 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
       a_envoyer[0] = fh[N-1]; a_envoyer[1] = fu[N-1]; // Les données à envoyer : les dernières valeurs du CPU courant
       // On envoie au CPU + 1
       erreur = MPI_Send(a_envoyer, 2 , MPI_DOUBLE_PRECISION, iCPU+1  , 257 + iCPU, MPI_COMM_WORLD);
-
     }
 
     if (iCPU != 0) //Tout le monde doit recevoir du CPU-1 sauf CPU 0
@@ -79,8 +77,8 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
       erreur = MPI_Recv(a_recevoir,2,MPI_DOUBLE_PRECISION, iCPU - 1, 257 + iCPU - 1, MPI_COMM_WORLD, &statut);
       fhm = a_recevoir[0]; fum = a_recevoir[1]; //Données stockées pour calculer h[0] et hu[0]
     }
-
   }
+
   else //Cas impair : on reçoit en premier
   {
     //On reçoit du CPU - 1
@@ -96,15 +94,14 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
 
   }
 
-  /*
-  Très vicieux la synthaxe h[0] = h[1]; hu[0] = hu[1]... ça m'a valu
-  plusieurs jours de débugage...
-  */
+  //Une fois le transfert des données effectué, il faut calculer les conditions limites pour chaque CPU
+
   if (iCPU != 0) //Si on n'est pas 0, on résout le point 0 avec les éléments envoyés précédemment
   {
     h[0] = h[0] - rap*(fh[0] - fhm);
     hu[0] = hu[0] - rap*(fu[0] - fum);
   }
+
   else //Sinon on résout le point 0 avec la condition limite en 0
   {
     h[0] = h[1];
@@ -116,6 +113,7 @@ void integre(int N, int iCPU, int nCPU, double dt, double dx, double *h, double 
     h[N-1] = h[N-1] - rap*(fh[N-1] - fh[N-2]);
     hu[N-1] = hu[N-1] - rap*(fu[N-1] - fu[N-2]);
   }
+  
   else //Sinon, on résout le point N-1 avec la condition limite en N-1
   {
     h[N-1] = h[N-2];
@@ -242,32 +240,35 @@ int main(int argc, char* argv[])
   FILE* fparam, *finit, *fres;
   double *x,*h, *hu, *fh, *fu;
 
+  //Initialisation de l'espace MPI
   erreur = MPI_Init(&argc, &argv);
   erreur = MPI_Comm_size(MPI_COMM_WORLD,&nCPU);
   erreur = MPI_Comm_rank(MPI_COMM_WORLD,&iCPU);
 
-  //Lecture des paramètres depuis le CPU 0 et broadcast à tous les autres CPU
+  //Lecture des paramètres N et Nt depuis le CPU 0
   if (iCPU == 0)
   {
     fparam = fopen("param.dat","r");
     fscanf(fparam, "%d %d",&N,&Nt);
     fclose(fparam);
     printf("%d %d\n",N,Nt);
+
+    //Broadcast à tous les autres CPU
+    erreur = MPI_Bcast(&N,  1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de N
+    erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de Nt
   }
 
-  erreur = MPI_Bcast(&N,  1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de N
-  erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de Nt
-
   erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
-  start = MPI_Wtime(); //Outil de profiling
+  start = MPI_Wtime(); //Début du chrono
 
-  dx = 1.0/((double)N); //Pas d'espace
+  dx = 1.0/((double)N); //Pas de discrétisation d'espace
   dt = 0.00000001; //Pas de temps (sera recalculé dans la boucle en temps)
 
   NP = decoupe(iCPU, nCPU, N, dx, &x0); //Découpage du domaine pour chaque CPU
   printf("CPU %d of %d : NP = %d\n",iCPU,nCPU,NP);
 
-  x  = malloc(NP*sizeof(double));  // allocation sur N points
+  // allocation sur NP points
+  x  = malloc(NP*sizeof(double));
   h  = malloc(NP*sizeof(double));
   fh = malloc(NP*sizeof(double));
   hu = malloc(NP*sizeof(double));
@@ -302,7 +303,7 @@ int main(int argc, char* argv[])
 
   if (iCPU == 0) printf("Temps maximal : %lf s\n",end-start);
 
-  MPI_Finalize();
+  MPI_Finalize(); //Fin
 
   free(x); free(h); free(hu); free(fh); free(fu); //Libérer la mémoire
 
