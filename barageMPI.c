@@ -176,7 +176,7 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
   {
     hg =  h[i]   ; hd =  h[i+1];
     ug = hu[i]/hg; ud = hu[i+1]/hd;
-    calculFlux(i,iCPU,hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp); //Calcul du flux
+    calculFlux(hg,hd,ug,ud,&fh[i],&fu[i],&cmaxp); //Calcul du flux
   }
 
 
@@ -220,7 +220,7 @@ double Flux(int N, int iCPU, int nCPU, double *h, double *hu, double *fh, double
 
   }
 
-  if (iCPU != nCPU-1) calculFlux(N-1,iCPU,hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
+  if (iCPU != nCPU-1) calculFlux(hg,hd,ug,ud,&fh[N-1],&fu[N-1],&cmaxp); //Calcul du flux au point N-1 si on n'est pas CPU N-1
 
   //On prend le max de toutes les vitesses cmaxp !! Ainsi, tout le monde va avancer du même dt
   erreur = MPI_Allreduce(&cmaxp, &cmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD);
