@@ -255,8 +255,8 @@ int main(int argc, char* argv[])
     printf("%d %d\n",N,Nt);
   }
 
-  erreur = MPI_Bcast(&N,1,MPI_INT,0,MPI_COMM_WORLD); //Envoi de N
-  erreur = MPI_Bcast(&Nt,1,MPI_INT,0,MPI_COMM_WORLD); //Envoi de Nt
+  erreur = MPI_Bcast(&N,  1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de N
+  erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD); //Envoi de Nt
 
   erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
   start = MPI_Wtime(); //Outil de profiling
