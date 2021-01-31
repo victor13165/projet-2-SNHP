@@ -244,15 +244,22 @@ void ecrit(int N, FILE* fichier,double *x, double *h, double *hu)
 int main(int argc, char* argv[])
 {
   int iCPU,nCPU,erreur,it;
-  int NP, N=1000000, Nt = 1000;
+  int NP, N, Nt;
   double x0, dx, cm=0.0, dt, start, end;
   char fichier_init[15], fichier_res[15];
-  FILE* finit, *fres;
+  FILE* fparam, *finit, *fres;
   double *x,*h, *hu, *fh, *fu;
 
   erreur = MPI_Init(&argc, &argv);
   erreur = MPI_Comm_size(MPI_COMM_WORLD,&nCPU);
   erreur = MPI_Comm_rank(MPI_COMM_WORLD,&iCPU);
+
+  if (iCPU == 0) {
+    fparam = fopen("param.dat","r");
+    fscanf(fparam,"%d %d", &N, &Nt);
+    erreur = MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  }
 
   erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
   start = MPI_Wtime(); //Outil de profiling
