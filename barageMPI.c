@@ -257,9 +257,12 @@ int main(int argc, char* argv[])
   if (iCPU == 0) {
     fparam = fopen("param.dat","r");
     fscanf(fparam,"%d %d", &N, &Nt);
-    erreur = MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    fclose(fparam);
+    printf("%d %d \n",N,Nt);
   }
+
+  erreur = MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  erreur = MPI_Bcast(&Nt, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   erreur = MPI_Barrier(MPI_COMM_WORLD); //Synchro tout le monde pour commencer le profiling
   start = MPI_Wtime(); //Outil de profiling
