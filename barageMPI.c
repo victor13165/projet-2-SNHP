@@ -106,6 +106,9 @@ J'ai décidé de séparer la partie échange de données et calcul de conditions
 que le code soit plus clair à lire. Plutôt que de faire des ifs a la suite on pourrait
 intégrer les calculs dans les échanges de données. Aussi plus pratique si je reviens sur
 ce code plus tard, je comprendrais plus rapidement.
+
+D'un point de vue temps de calcul, j'ai comparé pour 1 000 000 de points et il n'y a aucune
+différence.
 */
 
   if (iCPU != 0) //Si on n'est pas 0, on résout le point 0 avec les éléments envoyés précédemment
@@ -282,7 +285,7 @@ int main(int argc, char* argv[])
   init(NP,dx,x,h,hu,x0); //Initialiser le domaine et la condition initiale
 
   //******* Ecriture des conditions initiales dans fichiers séparés ************
-  sprintf(fichier_init,"MPI/init%d.dat",iCPU);
+  sprintf(fichier_init,"init%d.dat",iCPU);
   finit = fopen(fichier_init,"w");
   ecrit(NP,finit,x,h,hu);
   //****************************************************************************
@@ -295,7 +298,7 @@ int main(int argc, char* argv[])
   }
 
   //*********** Ecriture du résultat dans fichiers séparés *********************
-  sprintf(fichier_res,"MPI/res%d.dat",iCPU);
+  sprintf(fichier_res,"res%d.dat",iCPU);
   fres = fopen(fichier_res,"w");
   ecrit(NP,fres,x,h,hu);
   //****************************************************************************
